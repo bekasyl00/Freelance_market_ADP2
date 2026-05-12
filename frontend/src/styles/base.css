@@ -199,26 +199,23 @@ button {
   text-transform: uppercase;
 }
 
-.metrics-grid,
-.monitoring-grid {
+.metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
 }
 
-.metrics-grid--payments,
-.monitoring-grid {
+.metrics-grid--payments {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .metric-card,
 .job-card,
-.service-tile,
+.category-tile,
 .note-panel,
 .profile-summary,
 .skills-panel,
-.table-panel,
-.monitoring-tile {
+.table-panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -234,7 +231,7 @@ button {
 }
 
 .metric-card__icon,
-.monitoring-tile svg {
+.category-tile svg {
   width: 42px;
   height: 42px;
   display: grid;
@@ -276,7 +273,7 @@ button {
 
 .section-title h2,
 .note-panel h2,
-.monitoring-tile h2,
+.category-tile h3,
 .profile-summary h2 {
   margin: 0;
   font-size: 1.1rem;
@@ -287,38 +284,33 @@ button {
   font-size: 0.88rem;
 }
 
-.service-grid {
+.activity-panel {
+  min-width: 0;
+}
+
+.category-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
-.service-tile {
+.category-tile {
   padding: 16px;
+  display: grid;
+  gap: 12px;
 }
 
-.service-tile__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
-.service-tile__head svg {
+.category-tile svg {
+  background: #e7f2ed;
   color: var(--primary);
 }
 
-.service-tile h3 {
-  margin: 0;
-  font-size: 0.98rem;
+.category-tile h3 {
+  line-height: 1.25;
 }
 
-.service-tile ul {
-  list-style: none;
-  padding: 0;
+.category-tile p {
   margin: 0;
-  display: grid;
-  gap: 8px;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -342,6 +334,15 @@ button {
   color: var(--muted);
   line-height: 1.55;
   margin: 0;
+}
+
+.steps-list {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 12px;
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .toolbar {
@@ -597,23 +598,11 @@ th {
   text-transform: uppercase;
 }
 
-.monitoring-tile {
-  min-height: 146px;
-  padding: 18px;
-}
-
-.monitoring-tile p {
-  color: var(--muted);
-  margin: 12px 0 0;
-  overflow-wrap: anywhere;
-}
-
 @media (max-width: 1180px) {
   .metrics-grid,
   .metrics-grid--payments,
   .jobs-grid,
-  .monitoring-grid,
-  .service-grid {
+  .category-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -656,8 +645,7 @@ th {
   .metrics-grid,
   .metrics-grid--payments,
   .jobs-grid,
-  .monitoring-grid,
-  .service-grid,
+  .category-grid,
   .job-form,
   .nav-list {
     grid-template-columns: 1fr;

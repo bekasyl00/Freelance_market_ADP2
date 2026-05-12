@@ -36,7 +36,7 @@ function publishJob() {
       budget: Number(newJob.value.budget) || 0,
       deadline: '2026-06-20',
       status: 'open',
-      skills: ['Vue', 'Go', 'Postgres'],
+      skills: ['Web Design', 'Branding', 'SEO'],
       description: 'New client request is ready to receive proposals.',
       proposals: 0,
     },
