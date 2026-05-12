@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Freelance Market
+    orgId: 1
+    folder: Freelance Market
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
