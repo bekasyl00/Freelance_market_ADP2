@@ -7,7 +7,7 @@ Frontend and monitoring setup for the AP2 final project.
 - Vue 3 + Vite frontend
 - vue-i18n with English, Russian, and Kazakh translations
 - Go backend planned behind `VITE_API_BASE_URL`
-- Supabase Postgres planned for persistence
+- Local PostgreSQL for backend development, Supabase Postgres later for hosted deployment
 - Prometheus metrics collection
 - Grafana dashboards and alert rules
 
@@ -29,6 +29,49 @@ npm run build
 ```
 
 The Vercel config is in `frontend/vercel.json`. Set `VITE_API_BASE_URL` in Vercel when the Go gateway is deployed.
+
+## Local Database
+
+For the backend team, use local PostgreSQL first. Supabase can be connected later with the same schema.
+
+Start the database:
+
+```bash
+docker compose up -d postgres
+```
+
+Use this connection string in Go services:
+
+```env
+DATABASE_URL=postgresql://freelance:freelance@localhost:5433/freelance_market?sslmode=disable
+```
+
+The schema is loaded automatically from:
+
+```text
+database/init/001_schema.sql
+```
+
+If you need to reset the database:
+
+```bash
+docker compose down -v
+docker compose up -d postgres
+```
+
+Service migration files are still available for Go migration tools:
+
+```text
+services/user-service/migrations/000001_create_users.up.sql
+services/job-service/migrations/000001_create_jobs.up.sql
+services/payment-service/migrations/000001_create_payments.up.sql
+```
+
+For future Supabase deployment, use the hosted Postgres connection string:
+
+```env
+DATABASE_URL=postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require
+```
 
 ## Run Monitoring
 
