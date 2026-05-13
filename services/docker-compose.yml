@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: freelance_postgres
+    environment:
+      POSTGRES_USER: freelance
+      POSTGRES_PASSWORD: freelance
+      POSTGRES_DB: freelance_market
+    ports:
+      - "5433:5432" # Пробрасываем 5432 внутри контейнера на 5433 снаружи

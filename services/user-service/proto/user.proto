@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package user;
+
+option go_package = "user_service/proto;proto";
+
+enum Role {
+  UNKNOWN = 0;
+  ADMIN = 1;
+  CLIENT = 2;
+  FREELANCER = 3;
+}
+
+service UserService {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc GetProfile(GetProfileRequest) returns (UserResponse);
+  rpc UpdateSkills(UpdateSkillsRequest) returns (UserResponse);
+}
+
+message User {
+  int64 id = 1;
+  string username = 2;
+  string email = 3;
+  Role role = 4;
+  repeated string skills = 5;
+  float rating = 6;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string email = 2;
+  string password = 3;
+  Role role = 4; 
+}
+
+message RegisterResponse {
+  int64 id = 1;
+  string message = 2;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+}
+
+message GetProfileRequest {
+  int64 id = 1;
+}
+
+message UpdateSkillsRequest {
+  int64 id = 1;
+  repeated string skills = 2;
+}
+
+message UserResponse {
+  User user = 1;
+}
