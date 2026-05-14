@@ -38,6 +38,7 @@ async function submit() {
     if (!token) throw new Error('Invalid server response');
     localStorage.setItem('fm_token', token);
     localStorage.setItem('fm_user_id', id);
+    localStorage.setItem('fm_user_role', data.role || role.value);
     window.location.reload();
   } catch (e) {
     error.value = e.message;

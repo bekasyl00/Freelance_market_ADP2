@@ -1,19 +1,16 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, inject, onMounted, ref } from 'vue';
 import { Plus, Search } from 'lucide-vue-next';
 import JobCard from '../components/JobCard.vue';
 import { marketplaceApi } from '../services/marketplace';
 
+const navigateTo = inject('navigateTo');
 const jobs = ref([]);
 const applied = ref(new Set());
 const query = ref('');
-const isPublishing = ref(false);
-const newJob = ref({
-  title: '',
-  budget: 750,
-  description: '',
-  skills: 'Web Design, Branding, SEO',
-});
+
+const userRole = computed(() => localStorage.getItem('fm_user_role') || 'freelancer');
+const isClient = computed(() => userRole.value === 'client');
 
 const filteredJobs = computed(() => {
   const term = query.value.trim().toLowerCase();
@@ -25,52 +22,30 @@ const filteredJobs = computed(() => {
 
 onMounted(async () => {
   jobs.value = await marketplaceApi.getJobs();
+  const userId = localStorage.getItem('fm_user_id');
+  if (userId) {
+    const appliedIds = jobs.value
+      .filter(j => j.freelancers && j.freelancers.includes(userId))
+      .map(j => j.id);
+    applied.value = new Set(appliedIds);
+  }
 });
 
 async function applyToJob(jobId) {
   try {
     await marketplaceApi.applyToJob(jobId);
+    applied.value = new Set([...applied.value, jobId]);
+    const job = jobs.value.find(j => j.id === jobId);
+    if (job && job.clientId) {
+      navigateTo('chat:' + job.clientId + '|' + jobId);
+    }
   } catch (error) {
     console.warn(error);
   }
-  applied.value = new Set([...applied.value, jobId]);
 }
 
-async function publishJob() {
-  if (!newJob.value.title.trim()) return;
-
-  isPublishing.value = true;
-  const payload = {
-    title: newJob.value.title,
-    budget: Number(newJob.value.budget) || 0,
-    description: newJob.value.description,
-    skills: newJob.value.skills.split(',').map((item) => item.trim()).filter(Boolean),
-  };
-
-  try {
-    const created = await marketplaceApi.createJob(payload);
-    jobs.value = [created, ...jobs.value];
-  } catch (error) {
-    console.warn(error);
-    jobs.value = [
-      {
-        id: crypto.randomUUID(),
-        title: payload.title,
-        client: 'You',
-        budget: payload.budget,
-        deadline: '2026-06-20',
-        status: 'open',
-        skills: payload.skills,
-        description: payload.description || 'New client request is ready to receive proposals.',
-        proposals: 0,
-      },
-      ...jobs.value,
-    ];
-  } finally {
-    isPublishing.value = false;
-  }
-
-  newJob.value = { title: '', budget: 750, description: '', skills: 'Web Design, Branding, SEO' };
+function openJob(jobId) {
+  navigateTo('jobDetail:' + jobId);
 }
 </script>
 
@@ -89,30 +64,11 @@ async function publishJob() {
         <Search :size="18" />
         <input v-model="query" :placeholder="$t('app.search')" type="search" />
       </label>
-    </div>
-
-    <form class="job-form" @submit.prevent="publishJob">
-      <label>
-        {{ $t('jobs.newTitle') }}
-        <input v-model="newJob.title" type="text" required />
-      </label>
-      <label>
-        {{ $t('jobs.newBudget') }}
-        <input v-model="newJob.budget" min="100" step="50" type="number" />
-      </label>
-      <label>
-        {{ $t('jobs.skills') }}
-        <input v-model="newJob.skills" type="text" />
-      </label>
-      <label class="job-form__wide">
-        {{ $t('jobs.details') }}
-        <input v-model="newJob.description" type="text" />
-      </label>
-      <button class="button button--primary" type="submit" :disabled="isPublishing">
+      <button v-if="isClient" class="button button--primary" @click="navigateTo('createJob')">
         <Plus :size="16" />
-        {{ $t('jobs.publish') }}
+        {{ $t('jobs.create') }}
       </button>
-    </form>
+    </div>
 
     <div class="jobs-grid" v-if="filteredJobs.length">
       <JobCard
@@ -120,7 +76,9 @@ async function publishJob() {
         :key="job.id"
         :job="job"
         :applied="applied.has(job.id)"
+        :user-role="userRole"
         @apply="applyToJob"
+        @open="openJob"
       />
     </div>
     <p v-else class="empty-state">{{ $t('jobs.listEmpty') }}</p>

@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -101,6 +102,11 @@ type jobResponse struct {
 	Skills      []string `json:"skills"`
 	Description string   `json:"description"`
 	Proposals   int64    `json:"proposals"`
+	Freelancers []string `json:"freelancers"`
+	Applicants  []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"applicants"`
 }
 
 type profileResponse struct {
@@ -153,6 +159,7 @@ func main() {
 	mux.HandleFunc("/api/login", a.handleLogin)
 	// websocket chat
 	mux.HandleFunc("/ws/chat", a.handleWSChat)
+	mux.HandleFunc("/api/messages", a.handleGetMessages)
 	// profile update and avatar upload
 	mux.HandleFunc("/api/profile/photo", a.handleUploadAvatar)
 	mux.HandleFunc("/api/profile", func(w http.ResponseWriter, r *http.Request) {
@@ -199,6 +206,7 @@ func main() {
 		http.NotFound(w, r)
 	})
 	mux.HandleFunc("/api/payments/deposit", a.deposit)
+	mux.HandleFunc("/api/payments/transfer", a.transfer)
 	mux.HandleFunc("/api/payments/escrows", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost && !strings.HasSuffix(r.URL.Path, "/release") {
 			a.createEscrow(w, r)
@@ -211,6 +219,35 @@ func main() {
 		http.NotFound(w, r)
 	})
 
+	mux.HandleFunc("/api/reviews", a.submitReview)
+
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		metricsMu.Lock()
+		c := reqCount
+		b01 := bucket01
+		b05 := bucket05
+		b10 := bucket10
+		b50 := bucket50
+		metricsMu.Unlock()
+
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		fmt.Fprintf(w, "# HELP up Is the service up\n")
+		fmt.Fprintf(w, "# TYPE up gauge\n")
+		fmt.Fprintf(w, "up{job=\"gateway\"} 1\n")
+		
+		fmt.Fprintf(w, "# HELP http_requests_total Total requests\n")
+		fmt.Fprintf(w, "# TYPE http_requests_total counter\n")
+		fmt.Fprintf(w, "http_requests_total{job=\"gateway\"} %d\n", c)
+
+		fmt.Fprintf(w, "# HELP http_request_duration_seconds_bucket Request durations\n")
+		fmt.Fprintf(w, "# TYPE http_request_duration_seconds_bucket histogram\n")
+		fmt.Fprintf(w, "http_request_duration_seconds_bucket{job=\"gateway\",le=\"0.1\"} %d\n", b01)
+		fmt.Fprintf(w, "http_request_duration_seconds_bucket{job=\"gateway\",le=\"0.5\"} %d\n", b05)
+		fmt.Fprintf(w, "http_request_duration_seconds_bucket{job=\"gateway\",le=\"1.0\"} %d\n", b10)
+		fmt.Fprintf(w, "http_request_duration_seconds_bucket{job=\"gateway\",le=\"5.0\"} %d\n", b50)
+		fmt.Fprintf(w, "http_request_duration_seconds_bucket{job=\"gateway\",le=\"+Inf\"} %d\n", c)
+	})
+
 	handler := cors(logging(mux))
 	log.Printf("gateway listening on :%s", port)
 	// ensure messages and profile columns
@@ -219,6 +256,12 @@ func main() {
 	}
 	if err := ensureProfileColumns(db); err != nil {
 		log.Fatalf("ensure profile columns: %v", err)
+	}
+	if err := ensureTransferTypes(db); err != nil {
+		log.Fatalf("ensure transfer types: %v", err)
+	}
+	if err := ensureReviewsTable(db); err != nil {
+		log.Fatalf("ensure reviews table: %v", err)
 	}
 	go globalHub.run()
 	log.Fatal(http.ListenAndServe(":"+port, handler))
@@ -240,6 +283,30 @@ create table if not exists messages (
 func ensureProfileColumns(db *sql.DB) error {
 	// add avatar_url column if missing
 	_, err := db.Exec(`alter table users add column if not exists avatar_url text`)
+	return err
+}
+
+func ensureTransferTypes(db *sql.DB) error {
+	_, err := db.Exec(`
+alter table transactions drop constraint if exists transactions_type_check;
+alter table transactions add constraint transactions_type_check
+  check (type in ('deposit', 'escrow_hold', 'escrow_release', 'refund', 'withdrawal', 'transfer_out', 'transfer_in'));
+`)
+	return err
+}
+
+func ensureReviewsTable(db *sql.DB) error {
+	_, err := db.Exec(`
+create table if not exists reviews (
+  id uuid primary key default gen_random_uuid(),
+  reviewer_id uuid not null references users(id) on delete cascade,
+  freelancer_id uuid not null references users(id) on delete cascade,
+  rating integer not null check (rating >= 1 and rating <= 5),
+  comment text not null default '',
+  created_at timestamptz not null default now(),
+  unique (reviewer_id, freelancer_id)
+)
+`)
 	return err
 }
 
@@ -278,7 +345,7 @@ func (a *app) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"token": token, "id": id})
+	writeJSON(w, http.StatusCreated, map[string]string{"token": token, "id": id, "role": req.Role})
 }
 
 func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -303,7 +370,7 @@ func (a *app) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"token": token, "id": id})
+	writeJSON(w, http.StatusOK, map[string]string{"token": token, "id": id, "role": role})
 }
 
 func createJWT(id, role string) (string, error) {
@@ -369,11 +436,16 @@ func (a *app) handleWSChat(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// persist
-			if _, err := a.db.ExecContext(r.Context(), `insert into messages (from_user_id, to_user_id, content) values ($1, $2, $3)`, c.id, msg.To, msg.Content); err != nil {
+			if _, err := a.db.ExecContext(context.Background(), `insert into messages (from_user_id, to_user_id, content) values ($1, $2, $3)`, c.id, msg.To, msg.Content); err != nil {
 				log.Printf("insert message: %v", err)
 			}
 			// forward
-			b, _ := json.Marshal(map[string]string{"from": c.id, "content": msg.Content})
+			var senderName string
+			_ = a.db.QueryRowContext(context.Background(), `select full_name from users where id::text = $1`, c.id).Scan(&senderName)
+			if senderName == "" {
+				senderName = c.id
+			}
+			b, _ := json.Marshal(map[string]string{"from": c.id, "content": msg.Content, "partnerName": senderName})
 			globalHub.broadcast <- struct {
 				to  string
 				msg []byte
@@ -389,12 +461,66 @@ func (a *app) handleWSChat(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func (a *app) handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Authorization")
+	token = strings.TrimPrefix(token, "Bearer ")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+	uid, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	rows, err := a.db.QueryContext(r.Context(), `
+select m.from_user_id, m.to_user_id, m.content, m.created_at,
+       u_from.full_name, u_to.full_name
+from messages m
+join users u_from on u_from.id::text = m.from_user_id
+join users u_to on u_to.id::text = m.to_user_id
+where m.from_user_id = $1 or m.to_user_id = $1
+order by m.created_at asc
+`, uid)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer rows.Close()
+
+	type msgResp struct {
+		From        string    `json:"from"`
+		To          string    `json:"to"`
+		Content     string    `json:"content"`
+		Time        time.Time `json:"time"`
+		PartnerName string    `json:"partnerName"`
+	}
+	var messages []msgResp
+	for rows.Next() {
+		var m msgResp
+		var fromName, toName string
+		if err := rows.Scan(&m.From, &m.To, &m.Content, &m.Time, &fromName, &toName); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		if m.From == uid {
+			m.From = "me"
+			m.PartnerName = toName
+		} else {
+			m.PartnerName = fromName
+		}
+		messages = append(messages, m)
+	}
+	if messages == nil {
+		messages = []msgResp{}
+	}
+	writeJSON(w, http.StatusOK, messages)
+}
+
 func (a *app) handleUploadAvatar(w http.ResponseWriter, r *http.Request) {
 	// token auth
 	token := r.Header.Get("Authorization")
-	if strings.HasPrefix(token, "Bearer ") {
-		token = strings.TrimPrefix(token, "Bearer ")
-	}
+	token = strings.TrimPrefix(token, "Bearer ")
 	if token == "" {
 		http.Error(w, "missing token", http.StatusUnauthorized)
 		return
@@ -496,7 +622,14 @@ select
   u.id,
   u.full_name,
   coalesce(array_agg(distinct js.skill) filter (where js.skill is not null), '{}') as skills,
-  count(distinct p.id) as proposals
+  count(distinct p.id) as proposals,
+  coalesce(array_agg(distinct p.freelancer_id) filter (where p.freelancer_id is not null), '{}') as freelancers,
+  coalesce(
+    (select jsonb_agg(jsonb_build_object('id', pf.freelancer_id, 'name', uf.full_name))
+     from proposals pf
+     join users uf on uf.id = pf.freelancer_id
+     where pf.job_id = j.id), '[]'
+  ) as applicants_json
 from jobs j
 join users u on u.id = j.client_id
 left join job_skills js on js.job_id = j.id
@@ -514,16 +647,20 @@ order by j.created_at desc`)
 		var budgetCents int64
 		var currency string
 		var skills pqStringArray
+		var freelancers pqStringArray
+		var applicantsJSON []byte
 		job := jobResponse{}
 		if err := rows.Scan(
 			&job.ID, &job.Title, &job.Description, &budgetCents, &currency, &job.Status,
-			&job.Deadline, &job.ClientID, &job.Client, &skills, &job.Proposals,
+			&job.Deadline, &job.ClientID, &job.Client, &skills, &job.Proposals, &freelancers, &applicantsJSON,
 		); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 		job.Budget = centsToMoney(budgetCents)
 		job.Skills = []string(skills)
+		job.Freelancers = []string(freelancers)
+		json.Unmarshal(applicantsJSON, &job.Applicants)
 		jobs = append(jobs, job)
 	}
 	if err := rows.Err(); err != nil {
@@ -547,6 +684,12 @@ func (a *app) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Title = strings.TrimSpace(req.Title)
 	req.Description = strings.TrimSpace(req.Description)
+
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if uid, _, err := parseJWT(token); err == nil && uid != "" {
+		req.ClientID = uid
+	}
+
 	if req.ClientID == "" {
 		req.ClientID = mustDemoID(r.Context(), a.db, "client@demo.local")
 	}
@@ -607,6 +750,12 @@ func (a *app) applyToJob(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
+
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if uid, _, err := parseJWT(token); err == nil && uid != "" {
+		req.FreelancerID = uid
+	}
+
 	if req.FreelancerID == "" {
 		req.FreelancerID = mustDemoID(r.Context(), a.db, "freelancer@demo.local")
 	}
@@ -690,10 +839,18 @@ func (a *app) updateSkills(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *app) payments(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		userID = mustDemoID(r.Context(), a.db, "client@demo.local")
+	token := r.Header.Get("Authorization")
+	token = strings.TrimPrefix(token, "Bearer ")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
 	}
+	uid, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	userID := uid
 	out := paymentsResponse{History: []transactionResponse{}}
 	if err := a.db.QueryRowContext(r.Context(), `
 select available_cents, escrow_cents
@@ -734,16 +891,25 @@ limit 20`, userID)
 }
 
 func (a *app) deposit(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Authorization")
+	token = strings.TrimPrefix(token, "Bearer ")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+	uid, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	
 	var req struct {
-		UserID string  `json:"userId"`
 		Amount float64 `json:"amount"`
 	}
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.UserID == "" {
-		req.UserID = mustDemoID(r.Context(), a.db, "client@demo.local")
-	}
+	userID := uid
 	if req.Amount <= 0 {
 		writeErrorText(w, http.StatusBadRequest, "amount must be positive")
 		return
@@ -759,13 +925,13 @@ func (a *app) deposit(w http.ResponseWriter, r *http.Request) {
 insert into payment_accounts (user_id, available_cents)
 values ($1, $2)
 on conflict (user_id) do update
-set available_cents = payment_accounts.available_cents + excluded.available_cents`, req.UserID, cents); err != nil {
+set available_cents = payment_accounts.available_cents + excluded.available_cents`, userID, cents); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
 	if _, err := tx.ExecContext(r.Context(), `
-insert into transactions (user_id, type, amount_cents, status, provider)
-values ($1, 'deposit', $2, 'completed', 'demo')`, req.UserID, cents); err != nil {
+insert into transactions (user_id, type, amount_cents, status)
+values ($1, 'deposit', $2, 'completed')`, userID, cents); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -774,6 +940,133 @@ values ($1, 'deposit', $2, 'completed', 'demo')`, req.UserID, cents); err != nil
 		return
 	}
 	a.payments(w, r)
+}
+
+func (a *app) transfer(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("Authorization")
+	token = strings.TrimPrefix(token, "Bearer ")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+	senderID, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	
+	var req struct {
+		RecipientID string  `json:"recipientId"`
+		Amount      float64 `json:"amount"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Amount <= 0 {
+		writeErrorText(w, http.StatusBadRequest, "amount must be positive")
+		return
+	}
+	tx, err := a.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer rollback(tx)
+	cents := moneyToCents(req.Amount)
+	
+	// Deduct from sender
+	res, err := tx.ExecContext(r.Context(), `
+update payment_accounts 
+set available_cents = available_cents - $1 
+where user_id = $2 and available_cents >= $1`, cents, senderID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
+		writeErrorText(w, http.StatusBadRequest, "insufficient funds or account not found")
+		return
+	}
+
+	// Add to recipient
+	if _, err := tx.ExecContext(r.Context(), `
+insert into payment_accounts (user_id, available_cents)
+values ($1, $2)
+on conflict (user_id) do update
+set available_cents = payment_accounts.available_cents + excluded.available_cents`, req.RecipientID, cents); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	
+	// Transaction for sender
+	if _, err := tx.ExecContext(r.Context(), `
+insert into transactions (user_id, type, amount_cents, status)
+values ($1, 'transfer_out', $2, 'completed')`, senderID, cents); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	
+	// Transaction for recipient
+	if _, err := tx.ExecContext(r.Context(), `
+insert into transactions (user_id, type, amount_cents, status)
+values ($1, 'transfer_in', $2, 'completed')`, req.RecipientID, cents); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (a *app) submitReview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.NotFound(w, r)
+		return
+	}
+	token := r.Header.Get("Authorization")
+	token = strings.TrimPrefix(token, "Bearer ")
+	if token == "" {
+		http.Error(w, "missing token", http.StatusUnauthorized)
+		return
+	}
+	reviewerID, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+		return
+	}
+	var req struct {
+		FreelancerID string `json:"freelancerId"`
+		Rating       int    `json:"rating"`
+		Comment      string `json:"comment"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Rating < 1 || req.Rating > 5 {
+		writeErrorText(w, http.StatusBadRequest, "rating must be 1-5")
+		return
+	}
+	if _, err := a.db.ExecContext(r.Context(), `
+insert into reviews (reviewer_id, freelancer_id, rating, comment)
+values ($1, $2, $3, $4)
+on conflict (reviewer_id, freelancer_id)
+do update set rating = excluded.rating, comment = excluded.comment`,
+		reviewerID, req.FreelancerID, req.Rating, req.Comment); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	// Update average rating on users table
+	if _, err := a.db.ExecContext(r.Context(), `
+update users set rating = (
+  select coalesce(avg(rating), 0) from reviews where freelancer_id = $1
+) where id = $1`, req.FreelancerID); err != nil {
+		log.Printf("failed to update avg rating: %v", err)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (a *app) createEscrow(w http.ResponseWriter, r *http.Request) {
@@ -919,7 +1212,7 @@ group by j.id, u.id, u.full_name`, id)
 
 func (a *app) getProfile(ctx context.Context, userID string) (*profileResponse, error) {
 	row := a.db.QueryRowContext(ctx, `
-select u.id, u.full_name, u.role, u.rating, u.completed_jobs, u.avatar_url,
+select u.id, u.full_name, u.role, u.rating, u.completed_jobs, coalesce(u.avatar_url, ''),
 	   coalesce(array_agg(us.skill order by us.skill) filter (where us.skill is not null), '{}') as skills
 from users u
 left join user_skills us on us.user_id = u.id
@@ -1067,7 +1360,7 @@ func env(key, fallback string) string {
 
 // pathValue extracts an ID-like path segment for routes like
 // /api/jobs/{id}/apply or /api/payments/escrows/{id}/release
-func pathValue(r *http.Request, key string) string {
+func pathValue(r *http.Request, _ string) string {
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) == 0 {
 		return ""
@@ -1091,24 +1384,44 @@ func readJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 	return true
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	json.NewEncoder(w).Encode(data)
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
-	writeErrorText(w, status, err.Error())
+	log.Printf("error: %v", err)
+	writeJSON(w, status, apiError{Error: err.Error()})
 }
 
 func writeErrorText(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, apiError{Error: message})
 }
 
+var (
+	metricsMu sync.Mutex
+	reqCount  int64
+	bucket01  int64
+	bucket05  int64
+	bucket10  int64
+	bucket50  int64
+)
+
 func logging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
+		dur := time.Since(start).Seconds()
+		
+		metricsMu.Lock()
+		reqCount++
+		if dur <= 0.1 { bucket01++ }
+		if dur <= 0.5 { bucket05++ }
+		if dur <= 1.0 { bucket10++ }
+		if dur <= 5.0 { bucket50++ }
+		metricsMu.Unlock()
+		
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
 	})
 }

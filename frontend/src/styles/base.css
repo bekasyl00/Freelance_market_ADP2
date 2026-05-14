@@ -1215,3 +1215,155 @@ th {
 }
 .chat-empty-state h3 { margin: 0 0 6px; color: var(--text); }
 .chat-empty-state p { margin: 0; }
+
+/* ── Clickable Job Card ── */
+.job-card--clickable {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.job-card--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 32px rgba(25, 47, 39, 0.12);
+}
+.job-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.job-card__view-btn {
+  margin-left: auto;
+  font-size: 0.85rem;
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.toolbar .search-field {
+  flex: 1;
+  min-width: 200px;
+}
+
+/* ── Create Job Form ── */
+.create-job-form {
+  max-width: 640px;
+  display: grid;
+  gap: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+.create-job-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.create-job-textarea-wrap {
+  position: relative;
+}
+.create-job-textarea-icon {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.create-job-textarea-wrap textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 14px 14px 14px 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  resize: vertical;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.create-job-textarea-wrap textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(22,115,95,0.1);
+}
+
+/* ── Job Detail ── */
+.job-detail {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+}
+.job-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.job-detail__title {
+  font-size: 1.6rem;
+  margin: 6px 0 0;
+}
+.job-detail__meta {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 28px;
+  padding: 20px;
+  background: var(--surface-soft);
+  border-radius: 12px;
+}
+.job-detail__meta-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--primary-dark);
+}
+.job-detail__meta-label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.job-detail__meta-item strong {
+  font-size: 1.05rem;
+}
+.job-detail__body {
+  margin-bottom: 24px;
+}
+.job-detail__body h2 {
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+.job-detail__body p {
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 0;
+}
+.job-detail__skills {
+  margin-bottom: 24px;
+}
+.job-detail__skills h3 {
+  font-size: 0.95rem;
+  margin: 0 0 10px;
+}
+.job-detail__actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  .create-job-row { grid-template-columns: 1fr; }
+  .job-detail__meta { flex-direction: column; gap: 12px; }
+}

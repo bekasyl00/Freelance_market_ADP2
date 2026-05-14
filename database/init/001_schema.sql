@@ -142,7 +142,7 @@ create table if not exists transactions (
   user_id uuid not null references users(id) on delete restrict,
   job_id uuid references jobs(id) on delete set null,
   escrow_id uuid references escrows(id) on delete set null,
-  type text not null check (type in ('deposit', 'escrow_hold', 'escrow_release', 'refund', 'withdrawal')),
+  type text not null check (type in ('deposit', 'escrow_hold', 'escrow_release', 'refund', 'withdrawal', 'transfer_out', 'transfer_in')),
   amount_cents bigint not null check (amount_cents > 0),
   currency char(3) not null default 'USD',
   status text not null default 'pending' check (status in ('pending', 'completed', 'failed', 'cancelled')),

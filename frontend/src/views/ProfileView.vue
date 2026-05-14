@@ -3,7 +3,11 @@ import { computed, inject, onMounted, ref } from 'vue';
 import { Plus, Save, Upload, LogOut, Camera, Trash2 } from 'lucide-vue-next';
 import { marketplaceApi } from '../services/marketplace';
 
+const props = defineProps({ userId: { type: String, default: '' } });
+
 const appLogout = inject('logout');
+
+const isOwnProfile = computed(() => !props.userId || props.userId === localStorage.getItem('fm_user_id'));
 
 const profile = ref(null);
 const skill = ref('');
@@ -36,7 +40,10 @@ const avatarUrl = computed(() => {
 });
 
 onMounted(async () => {
-  profile.value = await marketplaceApi.getProfile();
+  profile.value = await marketplaceApi.getProfile(props.userId);
+  if (isOwnProfile.value && profile.value?.role) {
+    localStorage.setItem('fm_user_role', profile.value.role);
+  }
 });
 
 function addSkill() {
@@ -110,12 +117,12 @@ function logout() {
     <div class="profile-layout">
       <section class="profile-summary">
         <div class="profile-avatar-section">
-          <div class="avatar-wrapper" @click="fileInput && fileInput.click()">
+          <div class="avatar-wrapper" :style="{ cursor: isOwnProfile ? 'pointer' : 'default' }" @click="isOwnProfile && fileInput && fileInput.click()">
             <div v-if="avatarUrl" class="avatar avatar--image">
               <img :src="avatarUrl" alt="avatar" />
             </div>
             <div v-else class="avatar">{{ initials }}</div>
-            <div class="avatar-overlay">
+            <div v-if="isOwnProfile" class="avatar-overlay">
               <Camera :size="20" />
             </div>
           </div>
@@ -130,7 +137,8 @@ function logout() {
 
         <div class="profile-info">
           <div class="profile-name-field">
-            <input v-model="profile.name" class="profile-name-input" />
+            <h2 v-if="!isOwnProfile" class="profile-name-display" style="font-size: 1.5rem; font-weight: 700; margin: 0;">{{ profile.name }}</h2>
+            <input v-else v-model="profile.name" class="profile-name-input" />
           </div>
           <p class="profile-role">
             <span class="profile-role-badge" :class="`profile-role-badge--${profile.role}`">
@@ -139,7 +147,7 @@ function logout() {
           </p>
         </div>
 
-        <div class="profile-actions">
+        <div class="profile-actions" v-if="isOwnProfile">
           <button class="button button--ghost" @click="fileInput && fileInput.click()">
             <Upload :size="16" />
             {{ $t('profile.uploadAvatar') }}
@@ -160,7 +168,7 @@ function logout() {
             <Save :size="16" />
             {{ $t('common.save') }}
           </button>
-          <button class="button button--danger" @click="logout">
+          <button class="button button--danger" @click="appLogout">
             <LogOut :size="16" />
             {{ $t('nav.logout') || 'Logout' }}
           </button>
@@ -185,22 +193,22 @@ function logout() {
       <section class="skills-panel">
         <div class="section-title">
           <h2>{{ $t('profile.skills') }}</h2>
-          <button class="button button--ghost" type="button" :disabled="isSaving" @click="saveSkills">
+          <button v-if="isOwnProfile" class="button button--ghost" type="button" :disabled="isSaving" @click="saveSkills">
             <Save :size="16" />
             {{ $t('profile.updateSkills') }}
           </button>
         </div>
 
-        <div class="skill-row skill-row--large skill-row--editable">
+        <div class="skill-row skill-row--large" :class="{'skill-row--editable': isOwnProfile}">
           <span v-for="item in profile.skills" :key="item" class="skill-tag">
             {{ item }}
-            <button class="skill-remove" type="button" @click="removeSkill(item)">
+            <button v-if="isOwnProfile" class="skill-remove" type="button" @click="removeSkill(item)">
               <Trash2 :size="12" />
             </button>
           </span>
         </div>
 
-        <form class="inline-form" @submit.prevent="addSkill">
+        <form v-if="isOwnProfile" class="inline-form" @submit.prevent="addSkill">
           <input v-model="skill" :placeholder="$t('profile.addSkill')" type="text" />
           <button class="icon-button" type="submit" :aria-label="$t('profile.addSkill')">
             <Plus :size="18" />

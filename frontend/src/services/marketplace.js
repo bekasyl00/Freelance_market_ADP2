@@ -113,9 +113,26 @@ export const marketplaceApi = {
     });
   },
 
-  async getProfile() {
+  async getJobDetail(jobId) {
     try {
-      const userId = localStorage.getItem('fm_user_id');
+      return await request(`/jobs/${jobId}`);
+    } catch {
+      const all = await this.getJobs();
+      const found = all.find(j => j.id === jobId);
+      if (found) return found;
+      throw new Error('Job not found');
+    }
+  },
+
+  async completeJob(jobId) {
+    return request(`/jobs/${jobId}/complete`, {
+      method: 'POST',
+    });
+  },
+
+  async getProfile(targetUserId) {
+    try {
+      const userId = targetUserId || localStorage.getItem('fm_user_id');
       const query = userId ? `?user_id=${userId}` : '';
       return await request(`/profile${query}`);
     } catch {
@@ -126,6 +143,14 @@ export const marketplaceApi = {
         completedJobs: 0,
         skills: [],
       };
+    }
+  },
+
+  async getMessages() {
+    try {
+      return await request('/messages');
+    } catch {
+      return [];
     }
   },
 
@@ -157,27 +182,27 @@ export const marketplaceApi = {
   },
 
   async getPayments() {
-    try {
-      const userId = localStorage.getItem('fm_user_id');
-      const query = userId ? `?user_id=${userId}` : '';
-      return await request(`/payments${query}`);
-    } catch {
-      return {
-        available: 4200,
-        escrowed: 3100,
-        history: [
-          { id: 'tx-001', type: 'Deposit', amount: 2000, status: 'completed', date: '2026-05-10' },
-          { id: 'tx-002', type: 'CreateEscrow', amount: 900, status: 'pending', date: '2026-05-11' },
-          { id: 'tx-003', type: 'ReleasePayment', amount: 1250, status: 'completed', date: '2026-05-12' },
-        ],
-      };
-    }
+    return request('/payments');
+  },
+
+  async transfer(recipientId, amount) {
+    return request('/payments/transfer', {
+      method: 'POST',
+      body: JSON.stringify({ recipientId, amount }),
+    });
   },
 
   async deposit(amount) {
     return request('/payments/deposit', {
       method: 'POST',
       body: JSON.stringify({ amount }),
+    });
+  },
+
+  async submitReview(freelancerId, rating, comment) {
+    return request('/reviews', {
+      method: 'POST',
+      body: JSON.stringify({ freelancerId, rating, comment }),
     });
   },
 };

@@ -10,19 +10,6 @@ scrape_configs:
   - job_name: gateway
     metrics_path: /metrics
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["gateway:8080"]
 
-  - job_name: user-service
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["host.docker.internal:8081"]
 
-  - job_name: job-service
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["host.docker.internal:8082"]
-
-  - job_name: payment-service
-    metrics_path: /metrics
-    static_configs:
-      - targets: ["host.docker.internal:8083"]

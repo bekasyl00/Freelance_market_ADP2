@@ -32,10 +32,11 @@ async function submit() {
     let data = {};
     try { data = text ? JSON.parse(text) : {}; } catch { /* ignore */ }
     if (!res.ok) throw new Error(data.error || res.statusText || 'Login failed');
-    const { token, id } = data;
+    const { token, id, role } = data;
     if (!token) throw new Error('Invalid server response');
     localStorage.setItem('fm_token', token);
     localStorage.setItem('fm_user_id', id);
+    if (role) localStorage.setItem('fm_user_role', role);
     window.location.reload();
   } catch (e) {
     error.value = e.message;
