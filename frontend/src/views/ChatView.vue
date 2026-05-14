@@ -30,7 +30,13 @@ async function payFreelancer() {
   try {
     await marketplaceApi.transfer(to.value, Number(paymentAmount.value));
     showPaymentModal.value = false;
-    alert('Оплата успешно отправлена!');
+    // Send auto-message about payment in chat
+    const payMsg = `💰 Оплата $${paymentAmount.value} успешно отправлена!`;
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      ws.value.send(JSON.stringify({ to: to.value, content: payMsg }));
+      addMessage({ from: 'me', to: to.value, content: payMsg, time: new Date() });
+    }
+    paymentAmount.value = 50;
   } catch (err) {
     alert('Ошибка при оплате. Проверьте баланс.');
   } finally {

@@ -1,8 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { CircleDollarSign, LockKeyhole, LockKeyholeOpen, CreditCard, Wallet, ArrowUpRight } from 'lucide-vue-next';
+import { CircleDollarSign, LockKeyhole, LockKeyholeOpen, CreditCard, Wallet, ArrowUpRight, TrendingUp } from 'lucide-vue-next';
 import MetricCard from '../components/MetricCard.vue';
 import { marketplaceApi } from '../services/marketplace';
+
+const isClient = ref(localStorage.getItem('fm_user_role') === 'client');
+const isFreelancer = ref(localStorage.getItem('fm_user_role') === 'freelancer');
 
 const payments = ref({
   available: 0,
@@ -58,13 +61,25 @@ async function deposit() {
     </div>
 
     <div class="metrics-grid metrics-grid--payments">
-      <MetricCard :icon="CircleDollarSign" :label="$t('payments.available')" :value="`$${payments.available}`" :detail="$t('payments.deposit')" />
+      <MetricCard :icon="CircleDollarSign" :label="$t('payments.available')" :value="`$${payments.available}`" :detail="isFreelancer ? ($t('payments.earned') || 'Earned from clients') : $t('payments.deposit')" />
       <MetricCard :icon="LockKeyhole" :label="$t('payments.escrowed')" :value="`$${payments.escrowed}`" :detail="$t('payments.createEscrow')" />
-      <MetricCard :icon="LockKeyholeOpen" :label="$t('payments.release')" value="—" :detail="$t('common.completed')" />
+      <MetricCard v-if="isFreelancer" :icon="TrendingUp" :label="$t('payments.totalEarned') || 'Total earned'" :value="`$${payments.available + payments.escrowed}`" :detail="$t('payments.earnings') || 'Your earnings'" />
+      <MetricCard v-else :icon="LockKeyholeOpen" :label="$t('payments.release')" value="—" :detail="$t('common.completed')" />
     </div>
 
-    <!-- Deposit card -->
-    <div class="payment-card">
+    <!-- Freelancer earnings info -->
+    <div v-if="isFreelancer" class="payment-card" style="max-width: 460px;">
+      <div class="payment-card__header">
+        <TrendingUp :size="22" />
+        <h3>{{ $t('payments.myEarnings') || 'My Earnings' }}</h3>
+      </div>
+      <p style="color: var(--text-secondary, #666); font-size: 0.95rem; line-height: 1.6; margin: 0;">
+        {{ $t('payments.freelancerInfo') || 'Your balance is updated automatically when clients send you payments. All received transfers appear in the transaction history below.' }}
+      </p>
+    </div>
+
+    <!-- Deposit card (clients only) -->
+    <div v-if="isClient" class="payment-card">
       <div class="payment-card__header">
         <Wallet :size="22" />
         <h3>{{ $t('payments.topUpWallet') || 'Top up wallet' }}</h3>

@@ -25,7 +25,7 @@ type app struct {
 	db *sql.DB
 }
 
-var jwtSecret = []byte("your_secret_key_here")
+var jwtSecret = []byte(env("JWT_SECRET", "your_secret_key_here"))
 
 // Websocket hub
 type client struct {

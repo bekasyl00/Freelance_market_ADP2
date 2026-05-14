@@ -1,6 +1,6 @@
 <script setup>
 import { computed, inject, onMounted, ref } from 'vue';
-import { Plus, Save, Upload, LogOut, Camera, Trash2 } from 'lucide-vue-next';
+import { Plus, Save, Upload, LogOut, Camera, Trash2, Star } from 'lucide-vue-next';
 import { marketplaceApi } from '../services/marketplace';
 
 const props = defineProps({ userId: { type: String, default: '' } });
@@ -16,6 +16,30 @@ const isSavingProfile = ref(false);
 const avatarFile = ref(null);
 const avatarPreview = ref(null);
 const fileInput = ref(null);
+
+// Review state (for client viewing freelancer)
+const isViewerClient = ref(localStorage.getItem('fm_user_role') === 'client');
+const canReview = computed(() => !isOwnProfile.value && isViewerClient.value && profile.value?.role === 'freelancer');
+const reviewRating = ref(0);
+const reviewHover = ref(0);
+const reviewComment = ref('');
+const isSubmittingReview = ref(false);
+const reviewSent = ref(false);
+
+async function submitProfileReview() {
+  if (reviewRating.value < 1 || !props.userId) return;
+  isSubmittingReview.value = true;
+  try {
+    await marketplaceApi.submitReview(props.userId, reviewRating.value, reviewComment.value);
+    reviewSent.value = true;
+    // Refresh profile to see updated rating
+    profile.value = await marketplaceApi.getProfile(props.userId);
+  } catch (err) {
+    alert('Error submitting review');
+  } finally {
+    isSubmittingReview.value = false;
+  }
+}
 
 function onFileChange(e) {
   const file = e.target.files[0];
@@ -188,6 +212,44 @@ function logout() {
             <dd>{{ profile.completedJobs }}</dd>
           </div>
         </dl>
+
+        <!-- Review section (client viewing freelancer) -->
+        <div v-if="canReview" class="review-card">
+          <h3 style="margin: 0 0 0.75rem 0; font-size: 1rem;">{{ $t('profile.leaveReview') || 'Leave a review' }}</h3>
+          
+          <div v-if="reviewSent" style="background: #ecfdf5; color: #065f46; border: 1px solid #6ee7b7; border-radius: 8px; padding: 0.5rem 1rem; font-size: 0.9rem;">
+            ✅ {{ $t('profile.reviewSent') || 'Review submitted! Thank you.' }}
+          </div>
+
+          <template v-else>
+            <div style="display: flex; gap: 4px; margin-bottom: 0.75rem;">
+              <Star
+                v-for="s in 5" :key="s" :size="28"
+                :style="{ cursor: 'pointer', color: s <= (reviewHover || reviewRating) ? '#f59e0b' : '#d1d5db', fill: s <= (reviewHover || reviewRating) ? '#f59e0b' : 'none', transition: 'all 0.15s' }"
+                @click="reviewRating = s"
+                @mouseenter="reviewHover = s"
+                @mouseleave="reviewHover = 0"
+              />
+              <span v-if="reviewRating" style="margin-left: 0.5rem; font-weight: 600; color: var(--text); align-self: center;">{{ reviewRating }}/5</span>
+            </div>
+            <textarea
+              v-model="reviewComment"
+              :placeholder="$t('profile.reviewPlaceholder') || 'Write your review here...'"
+              rows="3"
+              style="width: 100%; padding: 0.5rem 0.75rem; border: 1.5px solid var(--border, #e5e7eb); border-radius: 8px; font-family: inherit; font-size: 0.9rem; resize: vertical; background: var(--surface, #fff);"
+            ></textarea>
+            <button
+              class="button button--primary"
+              :disabled="isSubmittingReview || reviewRating < 1"
+              @click="submitProfileReview"
+              style="margin-top: 0.5rem;"
+            >
+              <Star :size="16" />
+              {{ isSubmittingReview ? '...' : ($t('profile.submitReview') || 'Submit Review') }}
+            </button>
+          </template>
+        </div>
+
       </section>
 
       <section class="skills-panel">
@@ -218,3 +280,14 @@ function logout() {
     </div>
   </section>
 </template>
+
+<style scoped>
+.review-card {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, var(--surface, #fff) 0%, var(--bg, #f9fafb) 100%);
+  border: 1.5px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+}
+</style>
