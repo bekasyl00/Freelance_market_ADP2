@@ -1,10 +1,24 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { Plus, Save } from 'lucide-vue-next';
+import { computed, inject, onMounted, ref } from 'vue';
+import { Plus, Save, Upload, LogOut, Camera, Trash2 } from 'lucide-vue-next';
 import { marketplaceApi } from '../services/marketplace';
+
+const appLogout = inject('logout');
 
 const profile = ref(null);
 const skill = ref('');
+const isSaving = ref(false);
+const isSavingProfile = ref(false);
+const avatarFile = ref(null);
+const avatarPreview = ref(null);
+const fileInput = ref(null);
+
+function onFileChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  avatarFile.value = file;
+  avatarPreview.value = URL.createObjectURL(file);
+}
 
 const initials = computed(() => {
   if (!profile.value) return 'FM';
@@ -13,6 +27,12 @@ const initials = computed(() => {
     .map((part) => part[0])
     .join('')
     .slice(0, 2);
+});
+
+const avatarUrl = computed(() => {
+  if (avatarPreview.value) return avatarPreview.value;
+  if (profile.value?.avatar) return profile.value.avatar;
+  return null;
 });
 
 onMounted(async () => {
@@ -24,6 +44,56 @@ function addSkill() {
   if (!next || profile.value.skills.includes(next)) return;
   profile.value.skills = [...profile.value.skills, next];
   skill.value = '';
+}
+
+function removeSkill(skillToRemove) {
+  profile.value.skills = profile.value.skills.filter(s => s !== skillToRemove);
+}
+
+async function saveProfile() {
+  if (!profile.value) return;
+  isSavingProfile.value = true;
+  try {
+    profile.value = await marketplaceApi.updateProfile({ userId: profile.value.id, name: profile.value.name, avatar: profile.value.avatar });
+  } catch (error) {
+    console.warn(error);
+  } finally {
+    isSavingProfile.value = false;
+  }
+}
+
+async function uploadAvatar() {
+  if (!avatarFile.value) return;
+  try {
+    const res = await marketplaceApi.uploadAvatar(avatarFile.value);
+    profile.value.avatar = res.url;
+    avatarFile.value = null;
+    avatarPreview.value = null;
+  } catch (err) {
+    console.warn(err);
+  }
+}
+
+async function saveSkills() {
+  if (!profile.value) return;
+  isSaving.value = true;
+  try {
+    profile.value = await marketplaceApi.updateSkills(profile.value.id, profile.value.skills);
+  } catch (error) {
+    console.warn(error);
+  } finally {
+    isSaving.value = false;
+  }
+}
+
+function logout() {
+  if (appLogout) {
+    appLogout();
+  } else {
+    localStorage.removeItem('fm_token');
+    localStorage.removeItem('fm_user_id');
+    window.location.reload();
+  }
 }
 </script>
 
@@ -39,15 +109,71 @@ function addSkill() {
 
     <div class="profile-layout">
       <section class="profile-summary">
-        <div class="avatar">{{ initials }}</div>
-        <div>
-          <h2>{{ profile.name }}</h2>
-          <p>{{ $t('profile.role') }}: {{ $t(`profile.${profile.role}`) }}</p>
+        <div class="profile-avatar-section">
+          <div class="avatar-wrapper" @click="fileInput && fileInput.click()">
+            <div v-if="avatarUrl" class="avatar avatar--image">
+              <img :src="avatarUrl" alt="avatar" />
+            </div>
+            <div v-else class="avatar">{{ initials }}</div>
+            <div class="avatar-overlay">
+              <Camera :size="20" />
+            </div>
+          </div>
         </div>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="image/*"
+          class="sr-only"
+          @change="onFileChange"
+        />
+
+        <div class="profile-info">
+          <div class="profile-name-field">
+            <input v-model="profile.name" class="profile-name-input" />
+          </div>
+          <p class="profile-role">
+            <span class="profile-role-badge" :class="`profile-role-badge--${profile.role}`">
+              {{ $t(`profile.${profile.role}`) }}
+            </span>
+          </p>
+        </div>
+
+        <div class="profile-actions">
+          <button class="button button--ghost" @click="fileInput && fileInput.click()">
+            <Upload :size="16" />
+            {{ $t('profile.uploadAvatar') }}
+          </button>
+          <button
+            v-if="avatarFile"
+            class="button button--primary"
+            @click="uploadAvatar"
+          >
+            <Save :size="16" />
+            {{ $t('profile.saveAvatar') }}
+          </button>
+          <button
+            class="button button--primary"
+            :disabled="isSavingProfile"
+            @click="saveProfile"
+          >
+            <Save :size="16" />
+            {{ $t('common.save') }}
+          </button>
+          <button class="button button--danger" @click="logout">
+            <LogOut :size="16" />
+            {{ $t('nav.logout') || 'Logout' }}
+          </button>
+        </div>
+
         <dl>
           <div>
             <dt>{{ $t('profile.rating') }}</dt>
-            <dd>{{ profile.rating }}</dd>
+            <dd>
+              <span class="profile-rating">
+                ⭐ {{ profile.rating }}
+              </span>
+            </dd>
           </div>
           <div>
             <dt>{{ $t('profile.completed') }}</dt>
@@ -59,14 +185,19 @@ function addSkill() {
       <section class="skills-panel">
         <div class="section-title">
           <h2>{{ $t('profile.skills') }}</h2>
-          <button class="button button--ghost" type="button">
+          <button class="button button--ghost" type="button" :disabled="isSaving" @click="saveSkills">
             <Save :size="16" />
             {{ $t('profile.updateSkills') }}
           </button>
         </div>
 
-        <div class="skill-row skill-row--large">
-          <span v-for="item in profile.skills" :key="item">{{ item }}</span>
+        <div class="skill-row skill-row--large skill-row--editable">
+          <span v-for="item in profile.skills" :key="item" class="skill-tag">
+            {{ item }}
+            <button class="skill-remove" type="button" @click="removeSkill(item)">
+              <Trash2 :size="12" />
+            </button>
+          </span>
         </div>
 
         <form class="inline-form" @submit.prevent="addSkill">

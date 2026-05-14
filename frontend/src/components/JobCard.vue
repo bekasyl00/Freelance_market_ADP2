@@ -20,7 +20,7 @@ defineEmits(['apply']);
         <h3>{{ job.title }}</h3>
       </div>
       <span class="status-pill" :class="`status-pill--${job.status}`">
-        {{ job.status === 'open' ? $t('common.open') : $t('common.inProgress') }}
+        {{ job.status === 'open' ? $t('common.open') : job.status === 'completed' ? $t('common.completed') : $t('common.inProgress') }}
       </span>
     </div>
 

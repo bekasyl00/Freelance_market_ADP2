@@ -7,7 +7,13 @@ import { marketplaceApi } from '../services/marketplace';
 const jobs = ref([]);
 const applied = ref(new Set());
 const query = ref('');
-const newJob = ref({ title: '', budget: 750 });
+const isPublishing = ref(false);
+const newJob = ref({
+  title: '',
+  budget: 750,
+  description: '',
+  skills: 'Web Design, Branding, SEO',
+});
 
 const filteredJobs = computed(() => {
   const term = query.value.trim().toLowerCase();
@@ -21,29 +27,50 @@ onMounted(async () => {
   jobs.value = await marketplaceApi.getJobs();
 });
 
-function applyToJob(jobId) {
+async function applyToJob(jobId) {
+  try {
+    await marketplaceApi.applyToJob(jobId);
+  } catch (error) {
+    console.warn(error);
+  }
   applied.value = new Set([...applied.value, jobId]);
 }
 
-function publishJob() {
+async function publishJob() {
   if (!newJob.value.title.trim()) return;
 
-  jobs.value = [
-    {
-      id: crypto.randomUUID(),
-      title: newJob.value.title,
-      client: 'You',
-      budget: Number(newJob.value.budget) || 0,
-      deadline: '2026-06-20',
-      status: 'open',
-      skills: ['Web Design', 'Branding', 'SEO'],
-      description: 'New client request is ready to receive proposals.',
-      proposals: 0,
-    },
-    ...jobs.value,
-  ];
+  isPublishing.value = true;
+  const payload = {
+    title: newJob.value.title,
+    budget: Number(newJob.value.budget) || 0,
+    description: newJob.value.description,
+    skills: newJob.value.skills.split(',').map((item) => item.trim()).filter(Boolean),
+  };
 
-  newJob.value = { title: '', budget: 750 };
+  try {
+    const created = await marketplaceApi.createJob(payload);
+    jobs.value = [created, ...jobs.value];
+  } catch (error) {
+    console.warn(error);
+    jobs.value = [
+      {
+        id: crypto.randomUUID(),
+        title: payload.title,
+        client: 'You',
+        budget: payload.budget,
+        deadline: '2026-06-20',
+        status: 'open',
+        skills: payload.skills,
+        description: payload.description || 'New client request is ready to receive proposals.',
+        proposals: 0,
+      },
+      ...jobs.value,
+    ];
+  } finally {
+    isPublishing.value = false;
+  }
+
+  newJob.value = { title: '', budget: 750, description: '', skills: 'Web Design, Branding, SEO' };
 }
 </script>
 
@@ -73,7 +100,15 @@ function publishJob() {
         {{ $t('jobs.newBudget') }}
         <input v-model="newJob.budget" min="100" step="50" type="number" />
       </label>
-      <button class="button button--primary" type="submit">
+      <label>
+        {{ $t('jobs.skills') }}
+        <input v-model="newJob.skills" type="text" />
+      </label>
+      <label class="job-form__wide">
+        {{ $t('jobs.details') }}
+        <input v-model="newJob.description" type="text" />
+      </label>
+      <button class="button button--primary" type="submit" :disabled="isPublishing">
         <Plus :size="16" />
         {{ $t('jobs.publish') }}
       </button>

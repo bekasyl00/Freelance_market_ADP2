@@ -60,3 +60,15 @@ Recommended ownership:
 - payment-service: `payment_accounts`, `escrows`, `transactions`
 
 Supabase can be added later by running the same schema in a hosted Postgres database and changing only `DATABASE_URL`.
+
+## Start Full Local API
+
+```bash
+docker compose up -d postgres gateway
+```
+
+The gateway exposes REST endpoints for the frontend at:
+
+```text
+http://localhost:8088/api
+```

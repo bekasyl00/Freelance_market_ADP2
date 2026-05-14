@@ -52,6 +52,40 @@ The schema is loaded automatically from:
 database/init/001_schema.sql
 ```
 
+## Run Gateway API
+
+Start PostgreSQL and the REST gateway used by the Vue frontend:
+
+```bash
+docker compose up -d postgres gateway
+```
+
+Gateway URL:
+
+```text
+http://localhost:8088
+```
+
+Main frontend API variable:
+
+```env
+VITE_API_BASE_URL=http://localhost:8088/api
+```
+
+Useful checks:
+
+```bash
+curl http://localhost:8088/health
+curl http://localhost:8088/api/jobs
+curl http://localhost:8088/api/summary
+```
+
+API contract for frontend/backend collaboration:
+
+```text
+docs/API.md
+```
+
 If you need to reset the database:
 
 ```bash

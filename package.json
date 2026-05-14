@@ -2,7 +2,10 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev",
     "build": "npm --prefix frontend run build",
-    "preview": "npm --prefix frontend run preview"
+    "preview": "npm --prefix frontend run preview",
+    "gateway": "cd gateway && PORT=8088 go run ./cmd",
+    "db": "docker compose up -d postgres",
+    "stack": "docker compose up -d postgres gateway"
   },
   "devDependencies": {}
 }

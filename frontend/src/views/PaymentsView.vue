@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { CircleDollarSign, LockKeyhole, UnlockKeyhole } from 'lucide-vue-next';
+import { CircleDollarSign, LockKeyhole, LockKeyholeOpen } from 'lucide-vue-next';
 import MetricCard from '../components/MetricCard.vue';
 import { marketplaceApi } from '../services/marketplace';
 
@@ -9,10 +9,24 @@ const payments = ref({
   escrowed: 0,
   history: [],
 });
+const depositAmount = ref(500);
+const isDepositing = ref(false);
 
 onMounted(async () => {
   payments.value = await marketplaceApi.getPayments();
 });
+
+async function deposit() {
+  if (depositAmount.value <= 0) return;
+  isDepositing.value = true;
+  try {
+    payments.value = await marketplaceApi.deposit(Number(depositAmount.value));
+  } catch (error) {
+    console.warn(error);
+  } finally {
+    isDepositing.value = false;
+  }
+}
 </script>
 
 <template>
@@ -28,8 +42,19 @@ onMounted(async () => {
     <div class="metrics-grid metrics-grid--payments">
       <MetricCard :icon="CircleDollarSign" :label="$t('payments.available')" :value="`$${payments.available}`" :detail="$t('payments.deposit')" />
       <MetricCard :icon="LockKeyhole" :label="$t('payments.escrowed')" :value="`$${payments.escrowed}`" :detail="$t('payments.createEscrow')" />
-      <MetricCard :icon="UnlockKeyhole" :label="$t('payments.release')" value="$1,250" :detail="$t('common.completed')" />
+      <MetricCard :icon="LockKeyholeOpen" :label="$t('payments.release')" value="$1,250" :detail="$t('common.completed')" />
     </div>
+
+    <form class="job-form payment-form" @submit.prevent="deposit">
+      <label>
+        {{ $t('payments.deposit') }}
+        <input v-model="depositAmount" min="1" step="50" type="number" />
+      </label>
+      <button class="button button--primary" type="submit" :disabled="isDepositing">
+        <CircleDollarSign :size="16" />
+        {{ $t('payments.deposit') }}
+      </button>
+    </form>
 
     <section class="table-panel">
       <div class="section-title">
