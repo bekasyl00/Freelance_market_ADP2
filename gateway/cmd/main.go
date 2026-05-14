@@ -251,6 +251,9 @@ func main() {
 	handler := cors(logging(mux))
 	log.Printf("gateway listening on :%s", port)
 	// ensure messages and profile columns
+	if err := ensureBaseSchema(db); err != nil {
+		log.Fatalf("ensure base schema: %v", err)
+	}
 	if err := ensureMessagesTable(db); err != nil {
 		log.Fatalf("ensure messages table: %v", err)
 	}
@@ -265,6 +268,116 @@ func main() {
 	}
 	go globalHub.run()
 	log.Fatal(http.ListenAndServe(":"+port, handler))
+}
+
+func ensureBaseSchema(db *sql.DB) error {
+	_, err := db.Exec(`
+create extension if not exists pgcrypto;
+
+create table if not exists users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text not null,
+  full_name text not null,
+  role text not null check (role in ('client', 'freelancer', 'admin')),
+  avatar_url text,
+  bio text,
+  rating numeric(3, 2) not null default 0 check (rating >= 0 and rating <= 5),
+  completed_jobs integer not null default 0 check (completed_jobs >= 0),
+  is_verified boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists user_skills (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete cascade,
+  skill text not null,
+  created_at timestamptz not null default now(),
+  unique (user_id, skill)
+);
+
+create or replace function set_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_users_updated_at on users;
+create trigger trg_users_updated_at
+before update on users
+for each row execute function set_updated_at();
+
+create table if not exists jobs (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references users(id) on delete restrict,
+  title text not null,
+  description text not null,
+  budget_cents bigint not null check (budget_cents > 0),
+  currency char(3) not null default 'USD',
+  status text not null default 'open' check (status in ('open', 'in_progress', 'completed', 'cancelled')),
+  deadline date,
+  selected_freelancer_id uuid references users(id) on delete set null,
+  completed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint selected_freelancer_is_not_client check (
+    selected_freelancer_id is null or selected_freelancer_id <> client_id
+  )
+);
+
+create table if not exists job_skills (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references jobs(id) on delete cascade,
+  skill text not null,
+  created_at timestamptz not null default now(),
+  unique (job_id, skill)
+);
+
+create table if not exists payment_accounts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null unique references users(id) on delete cascade,
+  available_cents bigint not null default 0 check (available_cents >= 0),
+  escrow_cents bigint not null default 0 check (escrow_cents >= 0),
+  currency char(3) not null default 'USD',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists escrows (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null unique references jobs(id) on delete restrict,
+  client_id uuid not null references users(id) on delete restrict,
+  freelancer_id uuid not null references users(id) on delete restrict,
+  amount_cents bigint not null check (amount_cents > 0),
+  currency char(3) not null default 'USD',
+  status text not null default 'held' check (status in ('held', 'released', 'refunded', 'cancelled')),
+  held_at timestamptz not null default now(),
+  released_at timestamptz,
+  refunded_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint escrow_users_are_different check (client_id <> freelancer_id)
+);
+
+create table if not exists transactions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references users(id) on delete restrict,
+  job_id uuid references jobs(id) on delete set null,
+  escrow_id uuid references escrows(id) on delete set null,
+  type text not null check (type in ('deposit', 'escrow_hold', 'escrow_release', 'refund', 'withdrawal', 'transfer_out', 'transfer_in')),
+  amount_cents bigint not null check (amount_cents > 0),
+  currency char(3) not null default 'USD',
+  status text not null default 'pending' check (status in ('pending', 'completed', 'failed', 'cancelled')),
+  provider text,
+  provider_reference text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+`)
+	return err
 }
 
 func ensureMessagesTable(db *sql.DB) error {
