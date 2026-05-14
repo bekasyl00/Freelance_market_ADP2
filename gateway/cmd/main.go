@@ -148,6 +148,22 @@ func main() {
 	if err := waitForDB(ctx, db); err != nil {
 		log.Fatal(err)
 	}
+	if err := ensureBaseSchema(db); err != nil {
+		log.Fatalf("ensure base schema: %v", err)
+	}
+	if err := ensureMessagesTable(db); err != nil {
+		log.Fatalf("ensure messages table: %v", err)
+	}
+	if err := ensureProfileColumns(db); err != nil {
+		log.Fatalf("ensure profile columns: %v", err)
+	}
+	if err := ensureTransferTypes(db); err != nil {
+		log.Fatalf("ensure transfer types: %v", err)
+	}
+	if err := ensureReviewsTable(db); err != nil {
+		log.Fatalf("ensure reviews table: %v", err)
+	}
+
 	if err := ensureSeedData(ctx, db); err != nil {
 		log.Fatal(err)
 	}
@@ -250,22 +266,6 @@ func main() {
 
 	handler := cors(logging(mux))
 	log.Printf("gateway listening on :%s", port)
-	// ensure messages and profile columns
-	if err := ensureBaseSchema(db); err != nil {
-		log.Fatalf("ensure base schema: %v", err)
-	}
-	if err := ensureMessagesTable(db); err != nil {
-		log.Fatalf("ensure messages table: %v", err)
-	}
-	if err := ensureProfileColumns(db); err != nil {
-		log.Fatalf("ensure profile columns: %v", err)
-	}
-	if err := ensureTransferTypes(db); err != nil {
-		log.Fatalf("ensure transfer types: %v", err)
-	}
-	if err := ensureReviewsTable(db); err != nil {
-		log.Fatalf("ensure reviews table: %v", err)
-	}
 	go globalHub.run()
 	log.Fatal(http.ListenAndServe(":"+port, handler))
 }
