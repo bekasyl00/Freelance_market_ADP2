@@ -54,10 +54,10 @@ async function deposit() {
   <section class="view-stack">
     <div class="section-heading">
       <div>
-        <p class="eyebrow">{{ $t('payments.eyebrow') }}</p>
-        <h1>{{ $t('payments.title') }}</h1>
+        <p class="eyebrow">{{ isFreelancer ? ($t('payments.walletEyebrow') || 'Earnings') : $t('payments.eyebrow') }}</p>
+        <h1>{{ isFreelancer ? ($t('payments.walletTitle') || 'Freelancer Wallet') : $t('payments.title') }}</h1>
       </div>
-      <p>{{ $t('payments.subtitle') }}</p>
+      <p>{{ isFreelancer ? ($t('payments.walletSubtitle') || 'Your earnings and transaction history.') : $t('payments.subtitle') }}</p>
     </div>
 
     <div class="metrics-grid metrics-grid--payments">

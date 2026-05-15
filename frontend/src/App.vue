@@ -1,7 +1,7 @@
 <script setup>
 import { computed, provide, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { BriefcaseBusiness, CreditCard, LayoutDashboard, UserRound, MessageSquare, LogIn, LogOut, UserPlus } from 'lucide-vue-next';
+import { BriefcaseBusiness, CreditCard, LayoutDashboard, UserRound, MessageSquare, LogIn, LogOut, UserPlus, Wallet } from 'lucide-vue-next';
 import DashboardView from './views/DashboardView.vue';
 import JobsView from './views/JobsView.vue';
 import CreateJobView from './views/CreateJobView.vue';
@@ -29,7 +29,9 @@ const navItems = computed(() => {
   ];
   if (isAuthenticated.value) {
     items.push({ key: 'profile', label: t('nav.profile'), icon: UserRound });
-    if (!isFreelancer.value) {
+    if (isFreelancer.value) {
+      items.push({ key: 'payments', label: t('nav.wallet'), icon: Wallet });
+    } else {
       items.push({ key: 'payments', label: t('nav.payments'), icon: CreditCard });
     }
     items.push({ key: 'chat', label: t('nav.chat'), icon: MessageSquare });
