@@ -262,7 +262,7 @@ func main() {
 		fmt.Fprintf(w, "# HELP up Is the service up\n")
 		fmt.Fprintf(w, "# TYPE up gauge\n")
 		fmt.Fprintf(w, "up{job=\"gateway\"} 1\n")
-		
+
 		fmt.Fprintf(w, "# HELP http_requests_total Total requests\n")
 		fmt.Fprintf(w, "# TYPE http_requests_total counter\n")
 		fmt.Fprintf(w, "http_requests_total{job=\"gateway\"} %d\n", c)
@@ -1165,7 +1165,7 @@ func (a *app) deposit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
-	
+
 	var req struct {
 		Amount float64 `json:"amount"`
 	}
@@ -1217,7 +1217,7 @@ func (a *app) transfer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", http.StatusUnauthorized)
 		return
 	}
-	
+
 	var req struct {
 		RecipientID string  `json:"recipientId"`
 		Amount      float64 `json:"amount"`
@@ -1236,7 +1236,7 @@ func (a *app) transfer(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rollback(tx)
 	cents := moneyToCents(req.Amount)
-	
+
 	// Deduct from sender
 	res, err := tx.ExecContext(r.Context(), `
 update payment_accounts 
@@ -1261,7 +1261,7 @@ set available_cents = payment_accounts.available_cents + excluded.available_cent
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	
+
 	// Transaction for sender
 	if _, err := tx.ExecContext(r.Context(), `
 insert into transactions (user_id, type, amount_cents, status)
@@ -1269,7 +1269,7 @@ values ($1, 'transfer_out', $2, 'completed')`, senderID, cents); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	
+
 	// Transaction for recipient
 	if _, err := tx.ExecContext(r.Context(), `
 insert into transactions (user_id, type, amount_cents, status)
@@ -1676,15 +1676,23 @@ func logging(next http.Handler) http.Handler {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		dur := time.Since(start).Seconds()
-		
+
 		metricsMu.Lock()
 		reqCount++
-		if dur <= 0.1 { bucket01++ }
-		if dur <= 0.5 { bucket05++ }
-		if dur <= 1.0 { bucket10++ }
-		if dur <= 5.0 { bucket50++ }
+		if dur <= 0.1 {
+			bucket01++
+		}
+		if dur <= 0.5 {
+			bucket05++
+		}
+		if dur <= 1.0 {
+			bucket10++
+		}
+		if dur <= 5.0 {
+			bucket50++
+		}
 		metricsMu.Unlock()
-		
+
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
 	})
 }

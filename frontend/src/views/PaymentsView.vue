@@ -9,7 +9,6 @@ const isFreelancer = ref(localStorage.getItem('fm_user_role') === 'freelancer');
 
 const payments = ref({
   available: 0,
-  escrowed: 0,
   history: [],
 });
 const depositAmount = ref(500);
@@ -62,9 +61,7 @@ async function deposit() {
 
     <div class="metrics-grid metrics-grid--payments">
       <MetricCard :icon="CircleDollarSign" :label="$t('payments.available')" :value="`$${payments.available}`" :detail="isFreelancer ? ($t('payments.earned') || 'Earned from clients') : $t('payments.deposit')" />
-      <MetricCard :icon="LockKeyhole" :label="$t('payments.escrowed')" :value="`$${payments.escrowed}`" :detail="$t('payments.createEscrow')" />
-      <MetricCard v-if="isFreelancer" :icon="TrendingUp" :label="$t('payments.totalEarned') || 'Total earned'" :value="`$${payments.available + payments.escrowed}`" :detail="$t('payments.earnings') || 'Your earnings'" />
-      <MetricCard v-else :icon="LockKeyholeOpen" :label="$t('payments.release')" value="—" :detail="$t('common.completed')" />
+      <MetricCard v-if="isFreelancer" :icon="TrendingUp" :label="$t('payments.totalEarned') || 'Total earned'" :value="`$${payments.available}`" :detail="$t('payments.earnings') || 'Your earnings'" />
     </div>
 
     <!-- Freelancer earnings info -->

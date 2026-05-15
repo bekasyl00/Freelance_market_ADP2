@@ -1,0 +1,152 @@
+syntax = "proto3";
+
+package marketplace;
+
+option go_package = "freelance-market/proto";
+
+// --- Auth Service ---
+service AuthService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc GetProfile(GetProfileRequest) returns (ProfileResponse);
+  rpc UpdateProfile(UpdateProfileRequest) returns (ProfileResponse);
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string full_name = 3;
+  string role = 4;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  string token = 1;
+  string user_id = 2;
+}
+
+message GetProfileRequest {
+  string user_id = 1;
+}
+
+message ProfileResponse {
+  string id = 1;
+  string name = 2;
+  string role = 3;
+  double rating = 4;
+  int64 completed_jobs = 5;
+  string avatar = 6;
+  repeated string skills = 7;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1;
+  string name = 2;
+  string avatar = 3;
+}
+
+// --- Job Service ---
+service JobService {
+  rpc CreateJob(CreateJobRequest) returns (Job);
+  rpc ListJobs(ListJobsRequest) returns (JobList);
+  rpc GetJob(GetJobRequest) returns (Job);
+  rpc UpdateJob(UpdateJobRequest) returns (Job);
+  rpc DeleteJob(DeleteJobRequest) returns (Empty);
+  rpc ApplyToJob(ApplyRequest) returns (Empty);
+}
+
+message Job {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  double budget = 4;
+  string status = 5;
+  string client_id = 6;
+  string deadline = 7;
+  repeated string skills = 8;
+  int64 proposals_count = 9;
+}
+
+message CreateJobRequest {
+  string client_id = 1;
+  string title = 2;
+  string description = 3;
+  double budget = 4;
+  repeated string skills = 5;
+}
+
+message ListJobsRequest {}
+
+message JobList {
+  repeated Job jobs = 1;
+}
+
+message GetJobRequest {
+  string id = 1;
+}
+
+message UpdateJobRequest {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  double budget = 4;
+  string status = 5;
+}
+
+message DeleteJobRequest {
+  string id = 1;
+}
+
+message ApplyRequest {
+  string job_id = 1;
+  string freelancer_id = 2;
+}
+
+// --- Payment Service ---
+service PaymentService {
+  rpc GetBalance(BalanceRequest) returns (BalanceResponse);
+  rpc Deposit(DepositRequest) returns (BalanceResponse);
+  rpc Transfer(TransferRequest) returns (Empty);
+  rpc GetTransactions(TransactionRequest) returns (TransactionList);
+}
+
+message BalanceRequest {
+  string user_id = 1;
+}
+
+message BalanceResponse {
+  double balance = 1;
+}
+
+message DepositRequest {
+  string user_id = 1;
+  double amount = 2;
+}
+
+message TransferRequest {
+  string from_user_id = 1;
+  string to_user_id = 2;
+  double amount = 3;
+  string job_id = 4;
+}
+
+message TransactionRequest {
+  string user_id = 1;
+}
+
+message TransactionList {
+  repeated Transaction transactions = 1;
+}
+
+message Transaction {
+  string id = 1;
+  double amount = 2;
+  string type = 3;
+  string created_at = 4;
+}
+
+message Empty {}
