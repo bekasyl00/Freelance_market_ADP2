@@ -45,8 +45,8 @@ groups:
         labels:
           severity: critical
 
-      - uid: high-error-rate
-        title: High gateway error rate
+      - uid: high-latency
+        title: High gateway p95 latency
         condition: C
         data:
           - refId: A
@@ -55,7 +55,7 @@ groups:
               to: 0
             datasourceUid: Prometheus
             model:
-              expr: sum(rate(http_requests_total{job="gateway",status=~"5.."}[5m])) / clamp_min(sum(rate(http_requests_total{job="gateway"}[5m])), 1)
+              expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="gateway"}[5m]))
               refId: A
           - refId: C
             relativeTimeRange:
@@ -65,7 +65,7 @@ groups:
             model:
               conditions:
                 - evaluator:
-                    params: [0.05]
+                    params: [2]
                     type: gt
                   operator:
                     type: and
@@ -80,6 +80,6 @@ groups:
         noDataState: NoData
         execErrState: Error
         annotations:
-          summary: More than 5 percent of gateway requests are failing.
+          summary: p95 latency for gateway is above 2 seconds.
         labels:
           severity: warning

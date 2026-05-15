@@ -36,7 +36,7 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 8,
+        "w": 4,
         "x": 0,
         "y": 0
       },
@@ -55,11 +55,11 @@
       },
       "targets": [
         {
-          "expr": "avg(up{job=~\"gateway|user-service|job-service|payment-service\"})",
+          "expr": "up{job=\"gateway\"}",
           "refId": "A"
         }
       ],
-      "title": "Service availability",
+      "title": "Gateway Availability",
       "type": "stat"
     },
     {
@@ -69,21 +69,60 @@
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Req / sec",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
           "unit": "reqps"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 8,
-        "x": 8,
+        "w": 10,
+        "x": 4,
         "y": 0
       },
       "id": 2,
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
           "showLegend": true
         },
         "tooltip": {
@@ -93,12 +132,12 @@
       },
       "targets": [
         {
-          "expr": "sum by (job) (rate(http_requests_total[5m]))",
-          "legendFormat": "{{job}}",
+          "expr": "rate(http_requests_total{job=\"gateway\"}[5m])",
+          "legendFormat": "Gateway Rate",
           "refId": "A"
         }
       ],
-      "title": "Request rate",
+      "title": "Request Rate (RPS)",
       "type": "timeseries"
     },
     {
@@ -108,21 +147,60 @@
       },
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "Seconds",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
           "unit": "s"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 6,
-        "w": 8,
-        "x": 16,
+        "w": 10,
+        "x": 14,
         "y": 0
       },
       "id": 3,
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "right",
           "showLegend": true
         },
         "tooltip": {
@@ -132,18 +210,97 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket[5m])))",
-          "legendFormat": "p95 {{job}}",
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"gateway\"}[5m]))",
+          "legendFormat": "p95 Latency",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"gateway\"}[5m]))",
+          "legendFormat": "Median Latency",
+          "refId": "B"
+        }
+      ],
+      "title": "API Latency (p95 & median)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 4,
+      "options": {
+        "calculate": false,
+        "calculation": {},
+        "cellGap": 1,
+        "cellValues": {},
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Oranges",
+          "steps": 128
+        },
+        "exemplars": {
+          "color": "rgba(255, 0, 255, 0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "show": true,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false,
+          "unit": "s"
+        }
+      },
+      "targets": [
+        {
+          "expr": "rate(http_request_duration_seconds_bucket{job=\"gateway\"}[1m])",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
           "refId": "A"
         }
       ],
-      "title": "p95 latency",
-      "type": "timeseries"
+      "title": "Request Duration Heatmap",
+      "type": "heatmap"
     }
   ],
-  "refresh": "15s",
+  "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["freelance-market", "go", "prometheus"],
+  "tags": ["gateway", "go", "prometheus"],
   "templating": {
     "list": []
   },
@@ -155,6 +312,6 @@
   "timezone": "browser",
   "title": "Freelance Market Overview",
   "uid": "freelance-market-overview",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
