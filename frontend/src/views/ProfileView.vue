@@ -6,6 +6,7 @@ import { marketplaceApi } from '../services/marketplace';
 const props = defineProps({ userId: { type: String, default: '' } });
 
 const appLogout = inject('logout');
+const navigateTo = inject('navigateTo');
 
 const isOwnProfile = computed(() => !props.userId || props.userId === localStorage.getItem('fm_user_id'));
 
@@ -16,6 +17,7 @@ const isSavingProfile = ref(false);
 const avatarFile = ref(null);
 const avatarPreview = ref(null);
 const fileInput = ref(null);
+const clientJobs = ref([]);
 
 // Review state (for client viewing freelancer)
 const isViewerClient = ref(localStorage.getItem('fm_user_role') === 'client');
@@ -67,6 +69,15 @@ onMounted(async () => {
   profile.value = await marketplaceApi.getProfile(props.userId);
   if (isOwnProfile.value && profile.value?.role) {
     localStorage.setItem('fm_user_role', profile.value.role);
+  }
+  
+  if (profile.value && profile.value.role === 'client') {
+    try {
+      const allJobs = await marketplaceApi.getJobs();
+      clientJobs.value = allJobs.filter(j => j.clientId === profile.value.id);
+    } catch (e) {
+      console.warn("Failed to fetch client jobs:", e);
+    }
   }
 });
 
@@ -192,14 +203,14 @@ function logout() {
             <Save :size="16" />
             {{ $t('common.save') }}
           </button>
-          <button class="button button--danger" @click="appLogout">
+          <button class="button button--danger" @click="logout">
             <LogOut :size="16" />
             {{ $t('nav.logout') || 'Logout' }}
           </button>
         </div>
 
         <dl>
-          <div>
+          <div v-if="profile.role === 'freelancer'">
             <dt>{{ $t('profile.rating') }}</dt>
             <dd>
               <span class="profile-rating">
@@ -208,8 +219,8 @@ function logout() {
             </dd>
           </div>
           <div>
-            <dt>{{ $t('profile.completed') }}</dt>
-            <dd>{{ profile.completedJobs }}</dd>
+            <dt>{{ profile.role === 'freelancer' ? $t('profile.completed') : 'Создано заказов' }}</dt>
+            <dd>{{ profile.role === 'freelancer' ? profile.completedJobs : clientJobs.length }}</dd>
           </div>
         </dl>
 
@@ -252,7 +263,8 @@ function logout() {
 
       </section>
 
-      <section class="skills-panel">
+      <!-- FREELANCER SKILLS PANEL -->
+      <section v-if="profile.role === 'freelancer'" class="skills-panel">
         <div class="section-title">
           <h2>{{ $t('profile.skills') }}</h2>
           <button v-if="isOwnProfile" class="button button--ghost" type="button" :disabled="isSaving" @click="saveSkills">
@@ -277,6 +289,25 @@ function logout() {
           </button>
         </form>
       </section>
+
+      <!-- CLIENT CREATED JOBS PANEL -->
+      <section v-if="profile.role === 'client'" class="client-jobs-panel" style="background: var(--surface); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--line); flex: 1;">
+        <div class="section-title" style="margin-bottom: 1.5rem;">
+          <h2>Созданные заказы</h2>
+        </div>
+        <div class="jobs-list" style="display: flex; flex-direction: column; gap: 1rem;">
+          <div v-for="job in clientJobs" :key="job.id" class="job-card" style="padding: 1rem; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg); cursor: pointer; transition: all 0.2s;" @click="navigateTo('job:' + job.id)" onmouseover="this.style.borderColor='var(--primary)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.borderColor='var(--border)'; this.style.transform='none'">
+            <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem; color: var(--text);">{{ job.title }}</h3>
+            <p style="margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.4;">{{ job.description.length > 100 ? job.description.substring(0, 100) + '...' : job.description }}</p>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem; font-size: 0.85rem; color: var(--text); align-items: center;">
+              <span><strong>${{ job.budget }}</strong></span>
+              <span class="status-pill" :class="'status-pill--' + (job.status === 'in_progress' ? 'inProgress' : job.status)" style="font-size: 0.75rem;">{{ job.status === 'in_progress' ? 'In Progress' : (job.status.charAt(0).toUpperCase() + job.status.slice(1)) }}</span>
+            </div>
+          </div>
+          <p v-if="clientJobs.length === 0" style="color: var(--muted); padding: 2rem; text-align: center; border: 1px dashed var(--border); border-radius: var(--radius-md);">У этого клиента пока нет созданных заказов.</p>
+        </div>
+      </section>
+
     </div>
   </section>
 </template>
