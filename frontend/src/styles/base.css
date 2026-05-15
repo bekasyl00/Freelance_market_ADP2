@@ -1198,6 +1198,15 @@ th {
   min-height: 44px;
   padding: 0;
 }
+
+.chat-profile-hit {
+  cursor: pointer;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.chat-profile-hit:hover {
+  opacity: 0.85;
+}
 .chat-empty-state {
   text-align: center;
   padding: 60px 20px;

@@ -1,9 +1,11 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch, inject } from 'vue';
 import { Send, MessageSquare, Users, Search, AlertCircle, Wifi, WifiOff, CircleDollarSign, Star } from 'lucide-vue-next';
 import { marketplaceApi } from '../services/marketplace';
 
 const props = defineProps({ partnerId: { type: String, default: '' }, autoMsg: { type: String, default: '' } });
+
+const navigateTo = inject('navigateTo');
 
 const ws = ref(null);
 const messages = ref([]);
@@ -58,10 +60,6 @@ async function submitReview() {
   } finally {
     isSubmittingReview.value = false;
   }
-}
-
-function navigateTo(view) {
-  window.location.hash = view;
 }
 
 // Group messages by conversation partner
@@ -176,6 +174,11 @@ function selectConversation(partnerId) {
   to.value = partnerId;
 }
 
+function openPartnerProfile(userId) {
+  if (!userId || !navigateTo) return;
+  navigateTo('profile:' + userId);
+}
+
 function formatTime(date) {
   if (!date) return '';
   const d = new Date(date);
@@ -227,9 +230,9 @@ function formatTime(date) {
             :class="['chat-conv-item', { active: to === conv.id }]"
             @click="selectConversation(conv.id)"
           >
-            <div class="chat-conv-avatar">{{ conv.name.slice(0, 2).toUpperCase() }}</div>
+            <div class="chat-conv-avatar chat-profile-hit" @click.stop="openPartnerProfile(conv.id)">{{ conv.name.slice(0, 2).toUpperCase() }}</div>
             <div class="chat-conv-info">
-              <strong>{{ conv.name }}</strong>
+              <strong class="chat-profile-hit" @click.stop="openPartnerProfile(conv.id)">{{ conv.name }}</strong>
               <span>{{ conv.lastMessage.slice(0, 40) }}</span>
             </div>
           </button>
@@ -250,11 +253,11 @@ function formatTime(date) {
 
         <template v-else>
           <div class="chat-main__header">
-            <div class="chat-conv-avatar chat-conv-avatar--sm" style="cursor: pointer" @click="navigateTo('profile:' + to)">
+            <div class="chat-conv-avatar chat-conv-avatar--sm chat-profile-hit" @click="openPartnerProfile(to)">
               {{ (conversations.find(c => c.id === to)?.name || to).slice(0, 2).toUpperCase() }}
             </div>
             <div>
-              <strong style="cursor: pointer" @click="navigateTo('profile:' + to)">
+              <strong class="chat-profile-hit" @click="openPartnerProfile(to)">
                 {{ conversations.find(c => c.id === to)?.name || to }}
               </strong>
             </div>
