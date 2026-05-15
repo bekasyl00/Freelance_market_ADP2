@@ -130,6 +130,19 @@ export const marketplaceApi = {
     });
   },
 
+  async updateJob(jobId, data) {
+    return request(`/jobs/${jobId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteJob(jobId) {
+    return request(`/jobs/${jobId}`, {
+      method: 'DELETE',
+    });
+  },
+
   async getProfile(targetUserId) {
     try {
       const userId = targetUserId || localStorage.getItem('fm_user_id');

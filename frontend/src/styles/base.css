@@ -995,8 +995,10 @@ th {
 /* ── Chat Messenger ── */
 .chat-container {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  height: 520px;
+  grid-template-columns: 280px minmax(0, 1fr);
+  height: calc(100vh - 220px);
+  min-height: 420px;
+  max-height: 700px;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
@@ -1111,13 +1113,17 @@ th {
 .chat-main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
 }
 .chat-main__header {
-  padding: 14px 18px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 52px;
 }
 .chat-main__header strong { font-size: 0.9rem; display: block; }
 .chat-main__header .chat-status { margin-top: 2px; }

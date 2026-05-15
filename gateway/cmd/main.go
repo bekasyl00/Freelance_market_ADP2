@@ -211,6 +211,18 @@ func main() {
 			a.applyToJob(w, r)
 			return
 		}
+		if r.Method == http.MethodGet {
+			a.getJobDetail(w, r)
+			return
+		}
+		if r.Method == http.MethodPut {
+			a.updateJob(w, r)
+			return
+		}
+		if r.Method == http.MethodDelete {
+			a.deleteJob(w, r)
+			return
+		}
 		http.NotFound(w, r)
 	})
 	mux.HandleFunc("/api/profile/skills", a.updateSkills)
@@ -921,6 +933,122 @@ set cover_letter = excluded.cover_letter,
 	writeJSON(w, http.StatusCreated, map[string]string{"status": "proposal_sent"})
 }
 
+func (a *app) getJobDetail(w http.ResponseWriter, r *http.Request) {
+	jobID := pathValue(r, "id")
+	job, err := a.getJob(r.Context(), jobID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	// Attach applicants
+	rows, err := a.db.QueryContext(r.Context(), `
+select u.id, u.full_name from proposals p
+join users u on u.id = p.freelancer_id
+where p.job_id = $1`, jobID)
+	if err == nil {
+		defer rows.Close()
+		type applicant struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		var apps []applicant
+		for rows.Next() {
+			var a applicant
+			if rows.Scan(&a.ID, &a.Name) == nil {
+				apps = append(apps, a)
+			}
+		}
+		if apps != nil {
+			job.Applicants = make([]struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			}, len(apps))
+			for i, a := range apps {
+				job.Applicants[i].ID = a.ID
+				job.Applicants[i].Name = a.Name
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, job)
+}
+
+func (a *app) updateJob(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	uid, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	jobID := pathValue(r, "id")
+	// Verify ownership
+	var clientID string
+	if err := a.db.QueryRowContext(r.Context(), `select client_id from jobs where id = $1`, jobID).Scan(&clientID); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if clientID != uid {
+		http.Error(w, "forbidden: you are not the owner", http.StatusForbidden)
+		return
+	}
+	var req struct {
+		Title       string  `json:"title"`
+		Description string  `json:"description"`
+		Budget      float64 `json:"budget"`
+		Deadline    string  `json:"deadline"`
+		Status      string  `json:"status"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	// Update only provided fields
+	if req.Status != "" {
+		if _, err := a.db.ExecContext(r.Context(), `update jobs set status = $1, updated_at = now() where id = $2`, req.Status, jobID); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+	if req.Title != "" {
+		a.db.ExecContext(r.Context(), `update jobs set title = $1, updated_at = now() where id = $2`, req.Title, jobID)
+	}
+	if req.Description != "" {
+		a.db.ExecContext(r.Context(), `update jobs set description = $1, updated_at = now() where id = $2`, req.Description, jobID)
+	}
+	if req.Budget > 0 {
+		a.db.ExecContext(r.Context(), `update jobs set budget_cents = $1, updated_at = now() where id = $2`, moneyToCents(req.Budget), jobID)
+	}
+	if req.Deadline != "" {
+		a.db.ExecContext(r.Context(), `update jobs set deadline = $1, updated_at = now() where id = $2`, req.Deadline, jobID)
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (a *app) deleteJob(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	uid, _, err := parseJWT(token)
+	if err != nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	jobID := pathValue(r, "id")
+	var clientID string
+	if err := a.db.QueryRowContext(r.Context(), `select client_id from jobs where id = $1`, jobID).Scan(&clientID); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	if clientID != uid {
+		http.Error(w, "forbidden: you are not the owner", http.StatusForbidden)
+		return
+	}
+	// Delete related data first, then job
+	a.db.ExecContext(r.Context(), `delete from proposals where job_id = $1`, jobID)
+	a.db.ExecContext(r.Context(), `delete from job_skills where job_id = $1`, jobID)
+	if _, err := a.db.ExecContext(r.Context(), `delete from jobs where id = $1`, jobID); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func (a *app) profile(w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
 	if userID == "" {
@@ -1564,7 +1692,7 @@ func logging(next http.Handler) http.Handler {
 func cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
