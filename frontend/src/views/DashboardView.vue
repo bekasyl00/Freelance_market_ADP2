@@ -6,7 +6,6 @@ import { marketplaceApi } from '../services/marketplace';
 
 const summary = ref({
   activeJobs: 0,
-  escrowBalance: 0,
   proposals: 0,
   rating: 0,
 });
@@ -28,7 +27,7 @@ onMounted(async () => {
 
     <div class="metrics-grid">
       <MetricCard :icon="BriefcaseBusiness" :label="$t('dashboard.activeJobs')" :value="summary.activeJobs" detail="+12%" />
-      <MetricCard :icon="CircleDollarSign" :label="$t('dashboard.escrow')" :value="`$${summary.escrowBalance.toLocaleString()}`" detail="escrow" />
+
       <MetricCard :icon="Send" :label="$t('dashboard.proposals')" :value="summary.proposals" :detail="$t('common.pending')" />
       <MetricCard :icon="Star" :label="$t('dashboard.rating')" :value="summary.rating" :detail="$t('profile.freelancer')" />
     </div>
