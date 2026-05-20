@@ -8,7 +8,9 @@ import (
 	"strconv"
 	"syscall"
 
-	"freelance_market_adp2/nats_worker/email"
+	"notification_service/internal/mailer"
+	"notification_service/internal/usecase"
+
 	natsdelivery "notification_service/internal/delivery/nats"
 
 	"github.com/nats-io/nats.go"
@@ -26,28 +28,22 @@ func main() {
 	}
 	defer nc.Drain()
 
-	// Initialize Email Service
+	// Initialize SMTP Mailer
 	smtpPort, err := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	if err != nil {
 		log.Fatalf("Invalid SMTP_PORT: %v", err)
 	}
-	emailCfg := email.Config{
+	m := mailer.NewSMTP(mailer.Config{
 		Host:     os.Getenv("SMTP_HOST"),
 		Port:     smtpPort,
 		Username: os.Getenv("SMTP_USER"),
 		Password: os.Getenv("SMTP_PASS"),
 		From:     os.Getenv("SMTP_FROM"),
-	}
-	emailSvc := email.NewSMTPService(emailCfg)
+	})
 
-	// Initialize Worker
-	// In a real app, 'uc' would be a usecase implementation.
-	// Here we wrap the worker for the subscriber to consume.
-	emailWorker := email.NewWorker(nc, emailSvc)
-
-	// Assuming NewSubscriber takes a function or interface that matches HandleMessage
-	// Adjust 'uc' according to your natsdelivery implementation
-	sub := natsdelivery.NewSubscriber(nc, emailWorker)
+	// Initialize Usecase and Subscriber
+	uc := usecase.NewNotificationUsecase(m)
+	sub := natsdelivery.NewSubscriber(nc, uc)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
