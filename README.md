@@ -130,31 +130,31 @@ The Grafana dashboard is provisioned as `freelance-market-overview`, with alert 
 
 ```mermaid
 graph TD
-    Client[Client (Vue.js SPA)] -->|HTTP/REST| API_GW[API Gateway]
+    Client["Client (Vue.js SPA)"] -->|HTTP/REST| API_GW["API Gateway"]
     
-    API_GW -->|gRPC| UserSvc[User Service]
-    API_GW -->|gRPC| JobSvc[Job Service]
-    API_GW -->|gRPC| PaymentSvc[Payment Service]
+    API_GW -->|gRPC| UserSvc["User Service"]
+    API_GW -->|gRPC| JobSvc["Job Service"]
+    API_GW -->|gRPC| PaymentSvc["Payment Service"]
     
-    JobSvc -->|Publish Events| NATS[NATS Message Broker]
+    JobSvc -->|Publish Events| NATS["NATS Message Broker"]
     PaymentSvc -->|Publish Events| NATS
-    NATS -->|Consume Events| NotificationSvc[Notification Service]
+    NATS -->|Consume Events| NotificationSvc["Notification Service"]
     
-    UserSvc --> DB[(PostgreSQL)]
+    UserSvc --> DB[("PostgreSQL")]
     JobSvc --> DB
     PaymentSvc --> DB
     
-    JobSvc -.-> Cache[(Redis Cache Sim)]
+    JobSvc -.-> Cache[("Redis Cache Sim")]
     
-    Prometheus[Prometheus] -.->|Scrape Metrics| API_GW
+    Prometheus["Prometheus"] -.->|Scrape Metrics| API_GW
     Prometheus -.->|Scrape Metrics| UserSvc
     Prometheus -.->|Scrape Metrics| JobSvc
     Prometheus -.->|Scrape Metrics| PaymentSvc
     
-    API_GW -.->|Push Logs| Loki[Grafana Loki]
-    API_GW -.->|Push Traces| Tempo[Grafana Tempo]
+    API_GW -.->|Push Logs| Loki["Grafana Loki"]
+    API_GW -.->|Push Traces| Tempo["Grafana Tempo"]
     
-    Grafana[Grafana Dashboard] --> Prometheus
+    Grafana["Grafana Dashboard"] --> Prometheus
     Grafana --> Loki
     Grafana --> Tempo
 ```
